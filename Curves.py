@@ -36,7 +36,8 @@ def extrude_nn(size, ts, curve, spacing=16, path_radius=30):
     P = np.array([X, Y]).transpose()
     img = _segment_height(P, curve, ts_sel, size, path_radius)
 
-    return _fill_mountain(img)
+    #return _fill_mountain(img)
+    return img
 
 # generate a curve from the keypoints using lwr
 def curve_lwr(kps, ts, plot=False):
@@ -53,7 +54,7 @@ def _segment_height(p, curve, ts_sel, size, path_radius):
     z = np.zeros((size,size))
 
     # larger than maximum possible
-    min_d = np.tile(size**2, (size,size))
+    min_d = np.tile(-1., (size,size))
     min_idx = np.tile(0, (size,size))
     min_alpha = np.tile(0.0, (size,size))
 
@@ -75,7 +76,7 @@ def _segment_height(p, curve, ts_sel, size, path_radius):
         d = np.linalg.norm(pc-p, axis=2)
 
         # update values
-        mask = d < min_d
+        mask = (d < min_d) | (min_d < 0)
         min_d[mask] = d[mask]
         min_alpha[mask] = alpha[mask]
         min_idx[mask] = i
@@ -89,6 +90,11 @@ def _segment_height(p, curve, ts_sel, size, path_radius):
     mask = min_d < path_radius
     logbump = 4./(1. + np.exp((-min_d[mask]+path_radius/2))/10.)
     z[mask] = (zinterp[mask] + logbump) - np.min(zinterp)
+
+    bwmap = ((min_idx % 3)*127).astype(np.uint8)
+    bwmap[~mask] = 64
+
+    cv2.imwrite('bwmap.png', bwmap)
 
     return z
 
