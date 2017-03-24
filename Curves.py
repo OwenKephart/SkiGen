@@ -86,15 +86,14 @@ def _segment_height(p, curve, ts_sel, size, path_radius):
     zb = curve[2, ts_sel[min_idx+1]]
     zinterp = za + min_alpha*(zb-za)
 
-    #mask = min_d > -1
     mask = min_d < path_radius
-    logbump = 4./(1. + np.exp((-min_d[mask]+path_radius/2))/10.)
+    #logbump = 1./(1. + np.exp((-min_d[mask]+3.*path_radius/4))/10.)
+    logbump = 0.
     z[mask] = (zinterp[mask] + logbump) - np.min(zinterp)
 
-    bwmap = ((min_idx % 3)*127).astype(np.uint8)
-    bwmap[~mask] = 64
-
-    cv2.imwrite('bwmap.png', bwmap)
+    #bwmap = ((min_idx % 3)*127).astype(np.uint8)
+    #bwmap[~mask] = 64
+    #cv2.imwrite('bwmap.png', bwmap)
 
     return z
 

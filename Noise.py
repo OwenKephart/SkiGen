@@ -16,9 +16,12 @@ def _surflet(p, grad):
     return _smooth(p[0,:])*smooth(p[1,:])*np.dot(p,grad, axis=1)
     
 # get the noise function at each point in a grid
-def _noise(xs, ys, perm, grads):
-    x_cell = xs.astype(int)
-    y_cell = int(y)
+def _noise(size, perm, grads):
+    xs = np.arange(size)
+    ys = np.arange(size)
+
+    x_cell = xs.astype(np.int32)
+    y_cell = ys.astype(np.int32)
 
     total = np.zeros((size, size))
     # look at nearby corners
@@ -38,7 +41,6 @@ def FractalNoise(w, h, sizes):
     return vals
 
 def GradientNoise(size, grid_size):
-
     # number of pixels
     npix = size**2
     # used for hashing
@@ -55,5 +57,4 @@ def GradientNoise(size, grid_size):
             vals[x,y] = noise(
                     (x/float(w))*grid_w, 
                     (y/float(h))*grid_h, perm, size, grads)
-
     return vals
