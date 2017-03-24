@@ -29,15 +29,15 @@ def extrude_diffusion(size, ts, curve, iters=100, sigma=10):
     return img
 
 # nearest-neighbor based extrusion algorithm
-def extrude_nn(size, ts, curve, spacing=16, path_radius=30):
+def extrude_nn(size, ts, curve, spacing=1, path_radius=30):
     # select about npts evenly spaced points
     ts_sel = ts[::spacing]
     X, Y = np.meshgrid(np.arange(0,size,1),np.arange(0,size,1))
     P = np.array([X, Y]).transpose()
     img = _segment_height(P, curve, ts_sel, size, path_radius)
 
-    #return _fill_mountain(img)
-    return img
+    return _fill_mountain(img)
+    #return img
 
 # generate a curve from the keypoints using lwr
 def curve_lwr(kps, ts, plot=False):
@@ -87,8 +87,8 @@ def _segment_height(p, curve, ts_sel, size, path_radius):
     zinterp = za + min_alpha*(zb-za)
 
     mask = min_d < path_radius
-    #logbump = 1./(1. + np.exp((-min_d[mask]+3.*path_radius/4))/10.)
-    logbump = 0.
+    logbump = 1./(1. + np.exp((-min_d[mask]+3.*path_radius/4))/10.)
+    #logbump = 0.
     z[mask] = (zinterp[mask] + logbump) - np.min(zinterp)
 
     #bwmap = ((min_idx % 3)*127).astype(np.uint8)
