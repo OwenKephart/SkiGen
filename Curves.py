@@ -1,8 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
+import Noise
 
-PATH_RADIUS_DEFAULT=30
+PATH_RADIUS_DEFAULT=60
 
 # basic curve extrusion algorithm
 def extrude_linear(size, ts, curve, path_radius=PATH_RADIUS_DEFAULT):
@@ -36,10 +37,10 @@ def extrude_nn(size, ts, curve, spacing=1, path_radius=PATH_RADIUS_DEFAULT):
     ts_sel = ts[::spacing]
     X, Y = np.meshgrid(np.arange(0,size,1),np.arange(0,size,1))
     P = np.array([X, Y]).transpose()
+    print "Extruding Curve..."
     img = _segment_height(P, curve, ts_sel, size, path_radius)
 
     return _fill_lwr(img)
-    #return img
 
 # generate a curve from the keypoints using lwr
 def curve_lwr(kps, ts, plot=False):
@@ -107,7 +108,14 @@ def _fill_mountain(zs, iters=400, sigma=10):
 def _fill_lwr(zs):
     kps_x, kps_y, kps_z = _get_lwr_kps(zs)
 
+    print "Interpolating using LWR..."
     zs_interp = _lwr_array2d(kps_x, kps_y, kps_z, zs.shape)
+
+    print "Generating Noise"
+    noise = 0 #5*Noise.GradientNoise(zs.shape[0], 16)
+
+    # add in some gradient noise
+    zs_interp += noise
 
     mask = (zs == 0)
     zs[mask] = zs_interp[mask]
@@ -129,18 +137,17 @@ def _get_lwr_kps(zs):
         ymax = nz[0][-1]
         kps.append((x, ymin, zs[x][ymin]))
         kps.append((x, ymax, zs[x][ymax]))
+        
+    curve_pts = np.array(kps)
+    maxy = np.max(curve_pts[:,1]) 
+    miny = np.min(curve_pts[:,1])
 
-    # corner points should be zero
-    """
-    kps.append((0, 0, 0))
-    kps.append((0, zs.shape[1]-1, 0))
+    # corner points should be zero or zmax depending
+    kps.append((0, 0, zmax))
+    kps.append((0, zs.shape[1]-1, zmax))
     kps.append((zs.shape[0]-1, 0, 0))
     kps.append((zs.shape[0]-1, zs.shape[1]-1, 0))
-    """
     kps = np.array(kps)
-    maxy = np.max(kps[:,1]) 
-    miny = np.min(kps[:,1])
-    print maxy, miny
 
     # random variation
     NRAND = 60
@@ -148,9 +155,7 @@ def _get_lwr_kps(zs):
     # generate some random points that generally follow the slope
     randxs = zs.shape[0]*np.random.random(NRAND)
     randys = zs.shape[1]*np.random.random(NRAND)
-    randzs = zmax*(1.1 - np.random.random(NRAND)/3. - randxs/zs.shape[0])
-
-    print randys
+    randzs = zmax*(1 - np.random.random(NRAND)/3. - randxs/zs.shape[0])
 
     # only grab the ones that will not intersect the trail
     # (not worth it to do this without bounding box imo)
@@ -158,7 +163,6 @@ def _get_lwr_kps(zs):
     randxs = randxs[good_inds]
     randys = randys[good_inds]
     randzs = randzs[good_inds]
-    print randys
 
     xs = np.hstack((randxs,kps[:,0]))
     ys = np.hstack((randys,kps[:,1]))

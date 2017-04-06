@@ -13,17 +13,15 @@ def _smooth(t):
 
 # interpolation func
 def _surflet(p, grad):
-    return _smooth(p[0,:])*smooth(p[1,:])*np.dot(p,grad, axis=1)
+    return _smooth(p[0])*_smooth(p[1])*np.dot(p,grad)
     
 # get the noise function at each point in a grid
-def _noise(size, perm, grads):
-    xs = np.arange(size)
-    ys = np.arange(size)
+def _noise(x, y, size, perm, grads):
 
-    x_cell = xs.astype(np.int32)
-    y_cell = ys.astype(np.int32)
+    x_cell = int(x)
+    y_cell = int(y)
 
-    total = np.zeros((size, size))
+    total = 0.0
     # look at nearby corners
     for x_grid in range(x_cell,x_cell+2):
         for y_grid in range(y_cell,y_cell+2):
@@ -31,7 +29,7 @@ def _noise(size, perm, grads):
             h = perm[ (perm[(x_grid+size)%size] + y_grid + size) % size]
             # smooth this gradient in
             pt = np.array([x-x_grid, y-y_grid])
-            total += surflet(pt, grads[h])
+            total += _surflet(pt, grads[h])
     return total
 
 def FractalNoise(w, h, sizes):
@@ -49,12 +47,12 @@ def GradientNoise(size, grid_size):
     marks = 2.*np.pi*np.arange(0,npix,1)/npix
     grads = np.stack((np.cos(marks), np.sin(marks)), axis=1)
 
-    # store noise values
-    vals = _noise(size, perm, grads)
+    vals = np.empty((size, size))
+
     # noise value at each point 
-    for x in range(w):
-        for y in range(h):
-            vals[x,y] = noise(
-                    (x/float(w))*grid_w, 
-                    (y/float(h))*grid_h, perm, size, grads)
+    for x in range(size):
+        for y in range(size):
+            vals[x,y] = _noise(
+                    (x/float(size))*grid_size, 
+                    (y/float(size))*grid_size, size, perm, grads)
     return vals
