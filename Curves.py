@@ -2,8 +2,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 
+PATH_RADIUS_DEFAULT=60
+
 # basic curve extrusion algorithm
-def extrude_linear(size, ts, curve, path_radius=30):
+def extrude_linear(size, ts, curve, path_radius=PATH_RADIUS_DEFAULT):
     xs, ys, zs = curve
     img = np.zeros((size,size))
     for t in ts:
@@ -29,14 +31,14 @@ def extrude_diffusion(size, ts, curve, iters=100, sigma=10):
     return img
 
 # nearest-neighbor based extrusion algorithm
-def extrude_nn(size, ts, curve, spacing=1, path_radius=30):
+def extrude_nn(size, ts, curve, spacing=16, path_radius=PATH_RADIUS_DEFAULT):
     # select about npts evenly spaced points
     ts_sel = ts[::spacing]
     X, Y = np.meshgrid(np.arange(0,size,1),np.arange(0,size,1))
     P = np.array([X, Y]).transpose()
     img = _segment_height(P, curve, ts_sel, size, path_radius)
 
-    return _fill_mountain(img)
+    return _fill_lwr(img)
     #return img
 
 # generate a curve from the keypoints using lwr
@@ -88,24 +90,69 @@ def _segment_height(p, curve, ts_sel, size, path_radius):
 
     mask = min_d < path_radius
     logbump = 1./(1. + np.exp((-min_d[mask]+3.*path_radius/4))/10.)
-    #logbump = 0.
     z[mask] = (zinterp[mask] + logbump) - np.min(zinterp)
-
-    #bwmap = ((min_idx % 3)*127).astype(np.uint8)
-    #bwmap[~mask] = 64
-    #cv2.imwrite('bwmap.png', bwmap)
 
     return z
 
-def _fill_mountain(z, iters=400, sigma=10):
+def _fill_mountain(zs, iters=400, sigma=10):
     # get non-zero values
-    mask = z > 0
-    img = np.zeros_like(z)
-    img[mask] = z[mask]
+    mask = zs > 0
+    img = np.zeros_like(zs)
+    img[mask] = zs[mask]
     for i in range(iters):
         img = cv2.GaussianBlur(img, (0,0), sigma)
-        img[mask] = z[mask]
+        img[mask] = zs[mask]
     return img
+
+def _fill_lwr(zs):
+    kps_x, kps_y, kps_z = _get_lwr_kps(zs)
+
+    zs_interp = _lwr_array2d(kps_x, kps_y, kps_z, zs.shape)
+
+    mask = (zs == 0)
+    zs[mask] = zs_interp[mask]
+
+    return zs
+
+def _get_lwr_kps(zs):
+
+    zmax = np.max(zs)
+    zmin = np.min(zs)
+
+    kps = []
+    # selected points along the trail
+    for x in np.arange(0,zs.shape[0],2):
+        nz = np.nonzero(zs[x])
+        if len(nz[0]) == 0:
+            continue
+        ymin = nz[0][0]
+        ymax = nz[0][-1]
+        kps.append((x, ymin, zs[x][ymin]))
+        kps.append((x, ymax, zs[x][ymax]))
+
+    print kps
+
+    # corner points
+    """
+    kps.append((0, 0, zs[0][0]))
+    kps.append((0, zs.shape[1]-1, zs[0][-1]))
+    kps.append((zs.shape[0]-1, 0, zs[-1][0]))
+    kps.append((zs.shape[0]-1, zs.shape[1]-1, zs[-1][-1]))
+    """
+    kps = np.array(kps)
+
+    # random variation
+    randxs = zs.shape[0]*np.random.random(10)
+    randys = zs.shape[1]*np.random.random(10)
+    #randzs = zmax*(1 - np.random.random(60)/10. - randxs/zs.shape[0])
+    randzs = zmax*(np.ones(10))
+
+    xs = np.hstack((randxs,kps[0,:]))
+    ys = np.hstack((randys,kps[1,:]))
+    zs = np.hstack((randzs,kps[2,:]))
+
+    return xs, ys, zs
+
 
 
 # ************************* USED FOR LWR *************************
@@ -125,6 +172,22 @@ def _weighted_regression(x, y, w):
     results = np.linalg.lstsq(A, b)
     return results[0] # solution
 
+def _weighted_regression2d(x, y, z, w):
+
+    x = x.reshape((-1, 1))
+    y = y.reshape((-1, 1))
+    z = z.reshape((-1, 1))
+    w = w.reshape((-1, 1))
+
+    d = np.sqrt(w)
+
+    A = d * np.hstack((x, y, np.ones_like(x)))
+    b = d * z
+
+    results = np.linalg.lstsq(A, b)
+
+    return results[0]
+
 def _lwr(x, y, sigma, x0):
 
     # compute weights based on x0
@@ -136,14 +199,23 @@ def _lwr(x, y, sigma, x0):
     # compute fit
     return coeffs[0]*x0 + coeffs[1]
 
-def _lwr_array(kps_a, kps_b, ts, plot, sigma=25):
+def _lwr2d(x0, y0, x, y, z, sigma):
+
+    w = np.exp( -((x-x0)**2 + (y-y0)**2)/ (2*sigma**2))
+
+    coeffs = _weighted_regression2d(x, y, z, w)
+
+    return coeffs[0]*x0 + coeffs[1]*y0 + coeffs[2]
+
+def _lwr_array(kps_a, kps_b, ts, plot, sigma=40):
 
     # store the interpolated value
     cs = np.empty(ts.size)
     
     # for each t value, generate an interpolated c value based on kps
-    for (i, t) in enumerate(ts):
-        cs[i] = _lwr(kps_a, kps_b, sigma, t)
+    #for (i, t) in enumerate(ts):
+    for pt in ts:
+        cs[pt] = _lwr(kps_a, kps_b, sigma, pt)
 
     if plot:
         plt.plot(kps_a,kps_b, 'ro')
@@ -151,3 +223,15 @@ def _lwr_array(kps_a, kps_b, ts, plot, sigma=25):
         plt.axis('equal')
 
     return cs
+
+def _lwr_array2d(kps_x, kps_y, kps_z, shape, sigma=40):
+
+    # store the interpolated value
+    zs = np.empty(shape)
+    
+    # for each t value, generate an interpolated c value based on kps
+    for x in np.arange(shape[0]):
+        for y in np.arange(shape[1]):
+            zs[x][y] = _lwr2d(x, y, kps_x, kps_y, kps_z, sigma)
+
+    return zs
