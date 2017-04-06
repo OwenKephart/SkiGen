@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 
-PATH_RADIUS_DEFAULT=60
+PATH_RADIUS_DEFAULT=30
 
 # basic curve extrusion algorithm
 def extrude_linear(size, ts, curve, path_radius=PATH_RADIUS_DEFAULT):
@@ -31,7 +31,7 @@ def extrude_diffusion(size, ts, curve, iters=100, sigma=10):
     return img
 
 # nearest-neighbor based extrusion algorithm
-def extrude_nn(size, ts, curve, spacing=16, path_radius=PATH_RADIUS_DEFAULT):
+def extrude_nn(size, ts, curve, spacing=1, path_radius=PATH_RADIUS_DEFAULT):
     # select about npts evenly spaced points
     ts_sel = ts[::spacing]
     X, Y = np.meshgrid(np.arange(0,size,1),np.arange(0,size,1))
@@ -121,7 +121,7 @@ def _get_lwr_kps(zs):
 
     kps = []
     # selected points along the trail
-    for x in np.arange(0,zs.shape[0],2):
+    for x in np.arange(0,zs.shape[0],16):
         nz = np.nonzero(zs[x])
         if len(nz[0]) == 0:
             continue
@@ -130,26 +130,42 @@ def _get_lwr_kps(zs):
         kps.append((x, ymin, zs[x][ymin]))
         kps.append((x, ymax, zs[x][ymax]))
 
-    print kps
-
-    # corner points
+    # corner points should be zero
     """
-    kps.append((0, 0, zs[0][0]))
-    kps.append((0, zs.shape[1]-1, zs[0][-1]))
-    kps.append((zs.shape[0]-1, 0, zs[-1][0]))
-    kps.append((zs.shape[0]-1, zs.shape[1]-1, zs[-1][-1]))
+    kps.append((0, 0, 0))
+    kps.append((0, zs.shape[1]-1, 0))
+    kps.append((zs.shape[0]-1, 0, 0))
+    kps.append((zs.shape[0]-1, zs.shape[1]-1, 0))
     """
     kps = np.array(kps)
+    maxy = np.max(kps[:,1]) 
+    miny = np.min(kps[:,1])
+    print maxy, miny
 
     # random variation
-    randxs = zs.shape[0]*np.random.random(10)
-    randys = zs.shape[1]*np.random.random(10)
-    #randzs = zmax*(1 - np.random.random(60)/10. - randxs/zs.shape[0])
-    randzs = zmax*(np.ones(10))
+    NRAND = 60
 
-    xs = np.hstack((randxs,kps[0,:]))
-    ys = np.hstack((randys,kps[1,:]))
-    zs = np.hstack((randzs,kps[2,:]))
+    # generate some random points that generally follow the slope
+    randxs = zs.shape[0]*np.random.random(NRAND)
+    randys = zs.shape[1]*np.random.random(NRAND)
+    randzs = zmax*(1.1 - np.random.random(NRAND)/3. - randxs/zs.shape[0])
+
+    print randys
+
+    # only grab the ones that will not intersect the trail
+    # (not worth it to do this without bounding box imo)
+    good_inds = (randys < miny) | (randys > maxy)
+    randxs = randxs[good_inds]
+    randys = randys[good_inds]
+    randzs = randzs[good_inds]
+    print randys
+
+    xs = np.hstack((randxs,kps[:,0]))
+    ys = np.hstack((randys,kps[:,1]))
+    zs = np.hstack((randzs,kps[:,2]))
+
+    plt.figure()
+    plt.scatter(xs, ys)
 
     return xs, ys, zs
 
