@@ -11,7 +11,7 @@ def normalize(img):
     return (img-minval)/(maxval-minval)
 
 # cleans up a given height array and saves it
-def save(heights, maxheight, name):
+def save_trail(heights, maxheight, name):
     # make all the heights correct
     total = maxheight*normalize(heights)
     # correct data type
@@ -22,6 +22,15 @@ def save(heights, maxheight, name):
     total[-1,:] = 0
     total[0,:] = 0
     cv2.imwrite(name + ".tiff", total)
+
+# saves a map of all the tree locations in x,y space
+def save_trees(tree_list, name):
+    f = open(name+".txt", "w")
+    for loc in tree_list:
+        x = loc[0]
+        y = loc[1]
+        f.write(str(x) + " " + str(y) + "\n")
+    f.close()
 
 # displays a heightmap
 def plot(heights): 

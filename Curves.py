@@ -3,7 +3,7 @@ import numpy as np
 import cv2
 import Noise
 
-PATH_RADIUS_DEFAULT=60
+PATH_RADIUS_DEFAULT=30
 
 # basic curve extrusion algorithm
 def extrude_linear(size, ts, curve, path_radius=PATH_RADIUS_DEFAULT):
@@ -90,7 +90,7 @@ def _segment_height(p, curve, ts_sel, size, path_radius):
     zinterp = za + min_alpha*(zb-za)
 
     mask = min_d < path_radius
-    logbump = 1./(1. + np.exp((-min_d[mask]+3.*path_radius/4))/10.)
+    logbump = 1./(1. + np.exp(1.5*(-min_d[mask]+3*path_radius/4)))
     z[mask] = (zinterp[mask] + logbump) - np.min(zinterp)
 
     return z
@@ -106,6 +106,7 @@ def _fill_mountain(zs, iters=400, sigma=10):
     return img
 
 def _fill_lwr(zs):
+    tree_pts = _get_tree_pts(zs)
     kps_x, kps_y, kps_z = _get_lwr_kps(zs)
 
     print "Interpolating using LWR..."
@@ -120,7 +121,23 @@ def _fill_lwr(zs):
     mask = (zs == 0)
     zs[mask] = zs_interp[mask]
 
-    return zs
+    return zs, tree_pts
+
+def _get_tree_pts(zs):
+
+    kps = []
+    # selected points along the trail
+    for x in np.arange(0,zs.shape[0],1):
+        nz = np.nonzero(zs[x])
+        if len(nz[0]) == 0:
+            continue
+        x_c = x + (.5 - np.random.random()/2)
+        ymin = nz[0][0] + 4*np.random.random()
+        ymax = nz[0][-1] - 4*np.random.random()
+        kps.append((x_c, ymin))
+        kps.append((x_c, ymax))
+
+    return np.array(kps)
 
 def _get_lwr_kps(zs):
 
@@ -129,7 +146,7 @@ def _get_lwr_kps(zs):
 
     kps = []
     # selected points along the trail
-    for x in np.arange(0,zs.shape[0],16):
+    for x in np.arange(0,zs.shape[0],4):
         nz = np.nonzero(zs[x])
         if len(nz[0]) == 0:
             continue
@@ -139,8 +156,6 @@ def _get_lwr_kps(zs):
         kps.append((x, ymax, zs[x][ymax]))
         
     curve_pts = np.array(kps)
-    maxy = np.max(curve_pts[:,1]) 
-    miny = np.min(curve_pts[:,1])
 
     # corner points should be zero or zmax depending
     kps.append((0, 0, zmax))
@@ -155,11 +170,16 @@ def _get_lwr_kps(zs):
     # generate some random points that generally follow the slope
     randxs = zs.shape[0]*np.random.random(NRAND)
     randys = zs.shape[1]*np.random.random(NRAND)
-    randzs = zmax*(1 - np.random.random(NRAND)/3. - randxs/zs.shape[0])
+    all_x = np.arange(0, zs.shape[0]-1, 20)
+    mins = np.repeat(0, all_x.size)
+    maxs = np.repeat(zs.shape[1]-1, all_x.size)
+    randxs = np.hstack((randxs, all_x, all_x))
+    randys = np.hstack((randys, mins, maxs))
+    randzs = zmax*(1 - np.random.random(randxs.size)/3. - randxs/zs.shape[0])
 
     # only grab the ones that will not intersect the trail
-    # (not worth it to do this without bounding box imo)
-    good_inds = (randys < miny) | (randys > maxy)
+    print randxs.astype(np.int32)
+    good_inds = (zs[randxs.astype(np.int32), randys.astype(np.int32)] == 0)
     randxs = randxs[good_inds]
     randys = randys[good_inds]
     randzs = randzs[good_inds]

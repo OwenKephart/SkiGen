@@ -21,7 +21,7 @@ def gen_trail_points(size, n_points, offset=np.array([0,0,0])):
         if i == 1 or i == n_points-1:
             pts[i] = pts[i-1] + straight_vec(scale)
         else:
-            pts[i] = pts[i-1]+trail_vec(scale)
+            pts[i] = pts[i-1] + trail_vec(scale)
 
     return pts 
 

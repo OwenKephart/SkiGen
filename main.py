@@ -4,9 +4,10 @@ import Curves
 import Noise
 
 for ex_method in [Curves.extrude_nn]:
-    trail_map = Trails.gen_trail_map(512, extrude_method = ex_method)
+    trail_map, curve_pts = Trails.gen_trail_map(512, extrude_method = ex_method)
     Writer.plot(trail_map)
-    Writer.save(trail_map, 65000, "ridges")
+    Writer.save_trail(trail_map, 65000, "ridges")
+    Writer.save_trees(curve_pts, "ridges")
 Writer.show()
 
 """
